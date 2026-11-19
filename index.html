@@ -1,0 +1,2128 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>陽光社區・獨立生活認證挑戰</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- 引入 Google Fonts: Noto Sans TC 確保繁體中文高度易讀 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Noto Sans TC', sans-serif;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow-x: hidden;
+            background-color: #f8fafc;
+        }
+        /* 自訂滾動條，讓平板與白板操作更順暢 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* 選項按鈕特教友善防誤觸與高對比過渡動畫 */
+        .option-btn {
+            transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.2s ease, border-color 0.2s ease;
+        }
+        .option-btn:active:not(:disabled) {
+            transform: scale(0.985);
+        }
+        .option-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        /* 分數浮動加減特效 */
+        @keyframes floatScore {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-28px) scale(1.15); }
+        }
+        .score-float {
+            animation: floatScore 1.2s ease-out forwards;
+        }
+        /* 3D 畫布自適應 */
+        #three-container canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden flex flex-col lg:flex-row bg-slate-100 text-slate-800 select-none">
+
+    <!-- 左側 60%：3D 社區場景視窗 -->
+    <div id="left-viewport" class="relative w-full lg:w-[60%] h-[42vh] lg:h-full bg-sky-200 overflow-hidden shadow-inner flex-shrink-0">
+        <!-- Three.js 渲染容器 -->
+        <div id="three-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+        <!-- 左上角：禮儀分數與關卡進度資訊卡 -->
+        <div class="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex flex-wrap items-center gap-2 sm:gap-3 pointer-events-none">
+            <!-- 禮儀分數徽章 -->
+            <div class="relative bg-white/95 backdrop-blur-md border-2 border-amber-400 rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 shadow-lg flex items-center gap-2.5">
+                <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl sm:text-2xl font-black">
+                    ★
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-slate-500 tracking-wide">禮儀認證分數</div>
+                    <div class="flex items-baseline gap-1">
+                        <span id="score-display" class="text-2xl sm:text-3xl font-black text-amber-600">0</span>
+                        <span class="text-xs sm:text-sm font-bold text-slate-400">/ 100 分</span>
+                    </div>
+                </div>
+                <!-- 浮動加減分提示容器 -->
+                <div id="score-float-container" class="absolute -bottom-6 right-2 pointer-events-none"></div>
+            </div>
+
+            <!-- 當前場所標籤 -->
+            <div class="bg-slate-900/80 backdrop-blur-md text-white rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 shadow-lg border border-white/15">
+                <div class="text-[11px] sm:text-xs text-sky-300 font-bold" id="scene-subtitle">準備出發</div>
+                <div class="text-sm sm:text-base font-black tracking-wide" id="scene-title">陽光社區大門</div>
+            </div>
+        </div>
+
+        <!-- 右上角：三個懸浮功能按鈕（任務清單/禮儀小卡、語音靜音切換、回首頁確認） -->
+        <div class="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 flex items-center gap-2">
+            <!-- 任務清單 / 禮儀小卡 -->
+            <button id="btn-mission-card" onclick="toggleMissionModal(true)" title="任務清單與禮儀小卡"
+                class="bg-white/95 hover:bg-amber-50 active:scale-95 text-slate-800 border-2 border-slate-200 hover:border-amber-400 rounded-2xl p-2.5 sm:px-3.5 sm:py-2.5 shadow-lg flex items-center gap-1.5 font-bold text-sm transition">
+                <span class="text-lg sm:text-xl">📋</span>
+                <span class="hidden sm:inline">禮儀小卡</span>
+            </button>
+
+            <!-- 語音朗讀靜音切換 -->
+            <button id="btn-mute-toggle" onclick="toggleMute()" title="切換語音朗讀與音效"
+                class="bg-white/95 hover:bg-sky-50 active:scale-95 text-slate-800 border-2 border-slate-200 hover:border-sky-400 rounded-2xl p-2.5 sm:px-3.5 sm:py-2.5 shadow-lg flex items-center gap-1.5 font-bold text-sm transition">
+                <span id="mute-icon" class="text-lg sm:text-xl">🔊</span>
+                <span id="mute-label" class="hidden sm:inline">語音開啟</span>
+            </button>
+
+            <!-- 回首頁確認按鈕 -->
+            <button id="btn-home-confirm" onclick="toggleHomeModal(true)" title="回到首頁"
+                class="bg-white/95 hover:bg-rose-50 active:scale-95 text-slate-800 border-2 border-slate-200 hover:border-rose-400 rounded-2xl p-2.5 sm:px-3.5 sm:py-2.5 shadow-lg flex items-center gap-1.5 font-bold text-sm transition">
+                <span class="text-lg sm:text-xl">🏠</span>
+                <span class="hidden sm:inline">回首頁</span>
+            </button>
+        </div>
+
+        <!-- 底部操作提示條（視角拖曳與第一關建築點擊引導） -->
+        <div id="scene-hint-banner" class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 bg-slate-900/80 backdrop-blur-md text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-full shadow-lg border border-white/20 whitespace-nowrap flex items-center gap-2">
+            <span>👆 可拖曳畫面旋轉視角</span>
+            <span id="interactive-3d-tip" class="hidden text-amber-300 font-black">・請點擊 3D 建築或右側按鈕</span>
+        </div>
+    </div>
+
+    <!-- 右側 40%：任務分析控制面板 -->
+    <div id="right-panel" class="w-full lg:w-[40%] h-[58vh] lg:h-full bg-white border-t-4 lg:border-t-0 lg:border-l-4 border-slate-200 flex flex-col justify-between overflow-hidden shadow-2xl">
+        
+        <!-- 頂部：5 大關卡水平進度膠囊列 -->
+        <div class="bg-slate-50 border-b border-slate-200 px-3 py-2.5 sm:px-5 sm:py-3 flex-shrink-0">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-extrabold text-slate-500 tracking-wider uppercase">獨立生活認證進度</span>
+                <span id="mode-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">學習模式</span>
+            </div>
+            <div id="stage-pills" class="flex items-center gap-1.5 overflow-x-auto pb-1">
+                <!-- 由 JS 動態生成 5 個關卡膠囊 -->
+            </div>
+        </div>
+
+        <!-- 中央主內容區：對話框、大字體題目、大型觸控選項按鈕、回饋提示區 -->
+        <div id="control-scroll-area" class="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 space-y-4">
+            
+            <!-- NPC 對話氣泡與語音重聽喇叭按鈕 -->
+            <div id="npc-dialogue-box" class="bg-amber-50/90 border-2 border-amber-300 rounded-2xl p-3.5 sm:p-4 shadow-sm relative">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <div class="flex items-center gap-2">
+                        <span id="npc-avatar-emoji" class="text-2xl bg-white rounded-xl w-9 h-9 flex items-center justify-center shadow-sm border border-amber-200">🧑</span>
+                        <div>
+                            <div id="npc-name" class="font-black text-amber-900 text-base sm:text-lg leading-tight">社區小幫手「德哥」</div>
+                            <div id="npc-role" class="text-xs font-bold text-amber-700">親切學長導覽員</div>
+                        </div>
+                    </div>
+                    <!-- 顯眼的語音重聽喇叭按鈕 -->
+                    <button id="btn-replay-speech" onclick="replayCurrentSpeech()"
+                        class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs sm:text-sm px-3 py-2 rounded-xl shadow flex items-center gap-1.5 transition flex-shrink-0">
+                        <span class="text-base">🔊</span>
+                        <span>重聽語音</span>
+                    </button>
+                </div>
+                <p id="npc-text" class="text-slate-800 text-base sm:text-lg font-medium leading-relaxed mt-1">
+                    歡迎參加《陽光社區・獨立生活認證挑戰》！
+                </p>
+            </div>
+
+            <!-- 學習模式專屬：禮儀小訣竅提示卡 -->
+            <div id="learning-tip-box" class="hidden bg-sky-50 border-2 border-sky-300 rounded-2xl p-3.5 text-sky-900 text-sm sm:text-base font-bold flex items-start gap-2.5">
+                <span class="text-xl flex-shrink-0">💡</span>
+                <div>
+                    <div class="text-xs font-black text-sky-600 uppercase mb-0.5">學習模式・禮儀小訣竅</div>
+                    <div id="learning-tip-text">觀察環境標示，保持禮貌與安全距離。</div>
+                </div>
+            </div>
+
+            <!-- 情境與大字體題目區（18px - 28px） -->
+            <div id="question-section" class="space-y-2">
+                <div id="scenario-badge" class="inline-block bg-indigo-100 text-indigo-800 text-xs sm:text-sm font-extrabold px-3 py-1 rounded-lg">
+                    任務情境
+                </div>
+                <h2 id="question-title" class="text-xl sm:text-2xl font-black text-slate-900 leading-snug">
+                    準備好開始獨立生活認證挑戰了嗎？
+                </h2>
+            </div>
+
+            <!-- 互動回饋提示框（答對鼓勵或答錯正向引導） -->
+            <div id="feedback-box" class="hidden rounded-2xl p-4 border-2 font-bold text-base sm:text-lg leading-relaxed shadow-sm transition-all">
+                <div class="flex items-start gap-2.5">
+                    <span id="feedback-icon" class="text-2xl flex-shrink-0">🌟</span>
+                    <div id="feedback-text" class="flex-1"></div>
+                </div>
+            </div>
+
+            <!-- 大型高對比觸控選項按鈕區（高度 >= 56px） -->
+            <div id="options-container" class="space-y-3 pt-1 pb-4">
+                <!-- 由 JS 動態生成大型選項按鈕 -->
+            </div>
+
+        </div>
+
+        <!-- 底部：可折疊「老師設定 (▶ 老師設定)」面板 -->
+        <div class="border-t-2 border-slate-200 bg-slate-50 flex-shrink-0">
+            <button id="btn-teacher-toggle" onclick="toggleTeacherPanel()"
+                class="w-full px-4 py-2.5 sm:px-5 sm:py-3 flex items-center justify-between text-left font-extrabold text-slate-700 hover:bg-slate-100 transition text-sm sm:text-base">
+                <span class="flex items-center gap-2">
+                    <span id="teacher-arrow" class="inline-block transition-transform duration-200">▶</span>
+                    <span>老師設定（模式切換 / 跳關測試 / 語速調整）</span>
+                </span>
+                <span class="text-xs font-bold text-slate-400">教學輔助</span>
+            </button>
+
+            <div id="teacher-panel-body" class="hidden px-4 pb-4 pt-1 sm:px-5 space-y-3 border-t border-slate-200 bg-white max-h-60 overflow-y-auto">
+                <!-- 1. 教學模式切換 -->
+                <div>
+                    <label class="block text-xs font-black text-slate-500 mb-1.5">1. 輔助模式切換</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="setGameMode('learning')" id="mode-btn-learning"
+                            class="py-2 px-2 rounded-xl border-2 text-xs sm:text-sm font-bold transition bg-emerald-600 text-white border-emerald-600">
+                            學習模式<br><span class="text-[11px] font-normal opacity-90">顯示提示卡</span>
+                        </button>
+                        <button onclick="setGameMode('practice')" id="mode-btn-practice"
+                            class="py-2 px-2 rounded-xl border-2 text-xs sm:text-sm font-bold transition bg-white text-slate-700 border-slate-300 hover:border-sky-400">
+                            練習模式<br><span class="text-[11px] font-normal opacity-75">答錯給提示</span>
+                        </button>
+                        <button onclick="setGameMode('challenge')" id="mode-btn-challenge"
+                            class="py-2 px-2 rounded-xl border-2 text-xs sm:text-sm font-bold transition bg-white text-slate-700 border-slate-300 hover:border-amber-400">
+                            挑戰模式<br><span class="text-[11px] font-normal opacity-75">無提示+隨機</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. 語音朗讀語速調整 -->
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label for="speech-rate-slider" class="text-xs font-black text-slate-500">2. 語音朗讀速度 (zh-TW)</label>
+                        <span id="speech-rate-val" class="text-xs font-black text-sky-600">0.95x（適中）</span>
+                    </div>
+                    <input id="speech-rate-slider" type="range" min="0.7" max="1.2" step="0.05" value="0.95"
+                        oninput="updateSpeechRate(this.value)"
+                        class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-600">
+                </div>
+
+                <!-- 3. 直接跳關測試 -->
+                <div>
+                    <label class="block text-xs font-black text-slate-500 mb-1.5">3. 直接跳關測試</label>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button onclick="jumpToStep(0)" class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700">開場</button>
+                        <button onclick="jumpToStep(2)" class="px-2.5 py-1.5 rounded-lg bg-sky-100 hover:bg-sky-200 text-xs font-bold text-sky-800">1.便利商店</button>
+                        <button onclick="jumpToStep(5)" class="px-2.5 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-xs font-bold text-emerald-800">2.社區藥局</button>
+                        <button onclick="jumpToStep(8)" class="px-2.5 py-1.5 rounded-lg bg-rose-100 hover:bg-rose-200 text-xs font-bold text-rose-800">3.台灣夜市</button>
+                        <button onclick="jumpToStep(10)" class="px-2.5 py-1.5 rounded-lg bg-amber-100 hover:bg-amber-200 text-xs font-bold text-amber-800">4.巷口麵店</button>
+                        <button onclick="jumpToStep(12)" class="px-2.5 py-1.5 rounded-lg bg-teal-100 hover:bg-teal-200 text-xs font-bold text-teal-800">5.社區公園</button>
+                        <button onclick="jumpToStep(14)" class="px-2.5 py-1.5 rounded-lg bg-purple-100 hover:bg-purple-200 text-xs font-bold text-purple-800">結算認證</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 彈窗 1：任務清單與禮儀小卡 Modal -->
+    <div id="mission-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border-4 border-amber-300 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl">📋</span>
+                    <h3 class="text-xl font-black text-slate-900">獨立生活任務清單與禮儀小卡</h3>
+                </div>
+                <button onclick="toggleMissionModal(false)" class="w-10 h-10 rounded-full bg-slate-100 hover:bg-slate-200 font-black text-slate-600 text-lg">✕</button>
+            </div>
+            <div id="mission-modal-content" class="space-y-3 text-slate-700 text-base leading-relaxed max-h-[60vh] overflow-y-auto">
+                <!-- 由 JS 動態填入當前任務與五大禮儀原則 -->
+            </div>
+            <button onclick="toggleMissionModal(false)" class="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-lg shadow-md">
+                我知道了，繼續挑戰！
+            </button>
+        </div>
+    </div>
+
+    <!-- 彈窗 2：回首頁確認 Modal -->
+    <div id="home-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-4 border-rose-300 space-y-4 text-center">
+            <div class="text-5xl">🏠</div>
+            <h3 class="text-2xl font-black text-slate-900">確定要回到首頁嗎？</h3>
+            <p class="text-slate-600 text-base font-medium">回到首頁將會重新開始挑戰，目前的分數與關卡進度會歸零喔！</p>
+            <div class="grid grid-cols-2 gap-3 pt-2">
+                <button onclick="toggleHomeModal(false)" class="py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-lg">
+                    繼續挑戰
+                </button>
+                <button onclick="resetToHome()" class="py-3.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black text-lg shadow">
+                    確定回首頁
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // 1. 遊戲劇本與 10 題核心禮儀數據定義（完整還原所有對話、選項與計分規則）
+        // =========================================================================
+        const STAGES = [
+            { id: 1, short: "1.便利商店", name: "第一關：便利商店", mission: "購買午餐飯糰與繳交電費，並遵守排隊禮儀。" },
+            { id: 2, short: "2.社區藥局", name: "第二關：社區藥局", mission: "拿處方箋領藥與買 OK 繃，不隨意拿取或拆封商品。" },
+            { id: 3, short: "3.台灣夜市", name: "第三關：台灣夜市", mission: "買一杯珍珠奶茶，注意夜市排隊動線與邊走邊吃禮儀。" },
+            { id: 4, short: "4.巷口麵店", name: "第四關：巷口早餐店與麵店", mission: "找乾淨座位並畫單點餐，注意內用音量與餐具節約。" },
+            { id: 5, short: "5.社區公園", name: "第五關：社區公園", mission: "喝完飲料做好垃圾分類，並選擇適合年齡的運動器材。" }
+        ];
+
+        // 步驟索引對應完整流程：
+        // 0: 開場畫面一（社區大門前）
+        // 1: 開場畫面二（規則簡報）
+        // 2: 第一關 - 場所辨識觸發點（街道門口）
+        // 3: 第一關 - 選擇題 1（排隊位置） [scoredQ: 1]
+        // 4: 第一關 - 選擇題 2（突發狀況處理） [scoredQ: 2]
+        // 5: 第二關 - 選擇題 3（商品拿取規範） [scoredQ: 3]
+        // 6: 第二關 - 藥師諮詢對話（非計分題，但答錯扣5分引導重選）
+        // 7: 第二關 - 選擇題 4（場所功能確認） [scoredQ: 4]
+        // 8: 第三關 - 選擇題 5（夜市排隊與動線） [scoredQ: 5]
+        // 9: 第三關 - 選擇題 6（不隨意拿取與邊走邊吃禮儀） [scoredQ: 6]
+        // 10: 第四關 - 選擇題 7（內用入座與點餐流程） [scoredQ: 7]
+        // 11: 第四關 - 選擇題 8（餐飲場所禮儀） [scoredQ: 8]
+        // 12: 第五關 - 選擇題 9（公園環境禮儀） [scoredQ: 9]
+        // 13: 第五關 - 選擇題 10（設施年齡限制與社交禮儀） [scoredQ: 10]
+        // 14: 五關全破結算總評（導覽員：阿凱）
+
+        const GAME_STEPS = [
+            // --- 0: 畫面一：社區大門前 ---
+            {
+                stepId: 0,
+                stageIndex: 0,
+                sceneKey: "gate",
+                sceneTitle: "陽光社區大門",
+                sceneSubtitle: "開場導覽・畫面一",
+                npcName: "社區小幫手「德哥」",
+                npcRole: "親切學長導覽員",
+                npcEmoji: "🧑",
+                npcText: "歡迎參加《陽光社區・獨立生活認證挑戰》！你已經是即將畢業的高職生了，今天要測試你能不能自己解決生活中的大小事。",
+                scenarioBadge: "獨立生活等級認證",
+                question: "準備好接受學長「德哥」的社區挑戰了嗎？",
+                tip: "點擊下方「接受挑戰」按鈕，一起進入陽光社區吧！",
+                isScoredQuestion: false,
+                options: [
+                    { label: "接受挑戰！", isCorrect: true, delta: 0, feedback: "太有精神了！讓我們來看看挑戰規則吧。", nextStep: 1 }
+                ]
+            },
+            // --- 1: 畫面二：規則簡報 ---
+            {
+                stepId: 1,
+                stageIndex: 0,
+                sceneKey: "gate",
+                sceneTitle: "陽光社區大門",
+                sceneSubtitle: "規則簡報・畫面二",
+                npcName: "社區小幫手「德哥」",
+                npcRole: "親切學長導覽員",
+                npcEmoji: "🧑",
+                npcText: "只要順利完成這五個場所的任務，並把禮儀分數保持在 80 分以上，就能拿到最高等級的『社區生活大師』稱號！遇到突發狀況別緊張，冷靜想一想再選答案。出發囉！",
+                scenarioBadge: "挑戰規則說明",
+                question: "共有 5 個社區場所、10 題禮儀考驗，每答對一題獲得 10 分（滿分 100 分）。出發囉！",
+                tip: "每題都可以按「重聽語音」，答錯了也能聽提示重新思考再選一次喔！",
+                isScoredQuestion: false,
+                options: [
+                    { label: "出發囉！前往第一關", isCorrect: true, delta: 0, feedback: "出發！第一站我們來到社區街道，尋找便利商店。", nextStep: 2 }
+                ]
+            },
+            // --- 2: 第一關 - 場所辨識觸發點（街道門口） ---
+            {
+                stepId: 2,
+                stageIndex: 1,
+                sceneKey: "street",
+                sceneTitle: "社區街道・場所辨識",
+                sceneSubtitle: "第一關：便利商店",
+                npcName: "社區小幫手「德哥」",
+                npcRole: "任務提醒",
+                npcEmoji: "🧑",
+                npcText: "現在的第一個任務是：『買午餐飯糰和繳電費』。街道上有三棟建築物，請觀察招牌，走進正確的店家！",
+                scenarioBadge: "任務 1-1：場所辨識",
+                question: "你要「買午餐飯糰和繳電費」，應該走進哪一棟建築物？（也可以直接點擊左側 3D 建築喔！）",
+                tip: "看看哪一棟建築物有橘綠紅條紋和「24H 便利商店」的標誌！",
+                isScoredQuestion: false,
+                options: [
+                    {
+                        id: "store",
+                        label: "走進有「24H 標誌」的便利商店",
+                        isCorrect: true,
+                        delta: 0,
+                        npcOverrideName: "超商店員 NPC",
+                        npcOverrideEmoji: "🏪",
+                        feedback: "超商店員 NPC：「歡迎光臨！請問需要什麼服務嗎？（心裡 OS：先去架上拿你要的飯糰，再拿帳單來櫃檯排隊喔！）」",
+                        nextStep: 3
+                    },
+                    {
+                        id: "pharmacy",
+                        label: "走進綠色十字招牌的「社區藥局」",
+                        isCorrect: false,
+                        delta: 0,
+                        feedback: "系統提示：「等一下！你現在的任務是『買午餐飯糰和繳電費』喔。這裡是藥局，沒有賣熱騰騰的便當飯糰。請退出去，找找看有 24H 標誌 的便利商店吧！」"
+                    },
+                    {
+                        id: "library",
+                        label: "走進掛著書本圖案的「社區圖書館」",
+                        isCorrect: false,
+                        delta: 0,
+                        feedback: "系統提示：「等一下！你現在的任務是『買午餐飯糰和繳電費』喔。這裡是圖書館，沒有賣熱騰騰的便當飯糰。請退出去，找找看有 24H 標誌 的便利商店吧！」"
+                    }
+                ]
+            },
+            // --- 3: 第一關 - 選擇題 1（排隊位置） ---
+            {
+                stepId: 3,
+                stageIndex: 1,
+                sceneKey: "store_interior",
+                sceneTitle: "24H 便利商店內部",
+                sceneSubtitle: "第一關：便利商店（第 1 / 10 題）",
+                npcName: "超商店員 NPC",
+                npcRole: "結帳櫃檯",
+                npcEmoji: "🏪",
+                npcText: "歡迎光臨！結帳請沿著地上的黃色排隊線依序等候喔！",
+                scenarioBadge: "情境 1-2：排隊結帳考驗",
+                question: "結帳櫃檯前面有兩個人（A 小姐、B 先生）正在等，你拿著飯糰和帳單，應該站在哪裡？",
+                tip: "排隊要排在最後一位客人的後面，並保持一個手臂的禮貌距離。",
+                isScoredQuestion: true,
+                questionNum: 1,
+                options: [
+                    {
+                        label: "選項 A：直接走到最前面，把東西放在櫃檯上請店員先幫我結。",
+                        isCorrect: false,
+                        delta: -10,
+                        feedback: "B 先生轉頭說：「同學，大家都在排隊喔，請你到後面排隊好嗎？」（系統提示：插隊是不禮貌的行為，會引起別人生氣喔！請重新選擇。）"
+                    },
+                    {
+                        label: "選項 B：走到最後一位客人（B 先生）的後面，站在黃色排隊線上安靜等候。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "系統提示：「太棒了！你站在排隊線後方，並保持適當距離，非常有禮貌！」",
+                        nextStep: 4
+                    },
+                    {
+                        label: "選項 C：緊緊貼在 B 先生的背後，催促他快一點。",
+                        isCorrect: false,
+                        delta: -5,
+                        feedback: "系統提示：「靠太近會讓前面的人覺得有壓力、不舒服喔！排隊時要保持一個手臂的距離。」請重新選擇。"
+                    }
+                ]
+            },
+            // --- 4: 第一關 - 選擇題 2（突發狀況處理） ---
+            {
+                stepId: 4,
+                stageIndex: 1,
+                sceneKey: "store_interior",
+                sceneTitle: "24H 便利商店內部",
+                sceneSubtitle: "第一關：便利商店（第 2 / 10 題）",
+                npcName: "超商店員 NPC",
+                npcRole: "結帳櫃檯",
+                npcEmoji: "🏪",
+                npcText: "你好，一共是 35 元，加上電費單 450 元，總共 485 元。請問需要袋子嗎？",
+                scenarioBadge: "情境 1-3：突發狀況測驗",
+                question: "正要付錢時，你突然想到忘記拿飲料了！這時後面又多了一個人在排隊，你該怎麼辦？",
+                tip: "離開排隊隊伍就等於放棄原本的位置，不能中途插回來喔！",
+                isScoredQuestion: true,
+                questionNum: 2,
+                options: [
+                    {
+                        label: "選項 A：請店員先等我一下，我跑去拿飲料再直接插回來付錢。",
+                        isCorrect: false,
+                        delta: -10,
+                        feedback: "後面排隊的客人說：「不好意思，你離開隊伍就要重新排喔，後面還有很多人在等。」（系統提示：離開排隊隊伍就等於放棄原本的位置了！）請重新選擇。"
+                    },
+                    {
+                        label: "選項 B：先結完帳，或者去拿完飲料後，重新排在隊伍的最後面。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "系統提示：「完全正確！這才是成熟大人處理問題的方式，不耽誤別人的時間。」",
+                        nextStep: 5
+                    }
+                ]
+            },
+            // --- 5: 第二關 - 選擇題 3（商品拿取規範） ---
+            {
+                stepId: 5,
+                stageIndex: 2,
+                sceneKey: "pharmacy",
+                sceneTitle: "陽光社區藥局",
+                sceneSubtitle: "第二關：社區藥局（第 3 / 10 題）",
+                npcName: "社區小幫手「德哥」",
+                npcRole: "任務提醒",
+                npcEmoji: "🧑",
+                npcText: "歡迎來到第二關！你的任務清單寫著：『拿處方箋領藥 ＋ 買一盒 OK 繃』。經過貨架時，看到一排包裝超可愛的『聯名動漫造型維他命軟糖』。",
+                scenarioBadge: "情境 2-1：貨架誘惑考驗",
+                question: "架上的動漫軟糖看起來好酷，但今天任務單沒有寫要買這個，你也沒有多餘的零用錢。你會怎麼做？",
+                tip: "沒有要買的商品用眼睛看就好，千萬不能隨意亂放或拆開包裝！",
+                isScoredQuestion: true,
+                questionNum: 3,
+                options: [
+                    {
+                        label: "選項 A：眼睛看一看就好，不隨便拿起來，直接去找 OK 繃和藥師。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "系統提示：「做得好！沒有要買的東西用眼睛看就好，這樣最安全也不會弄亂商品。」",
+                        nextStep: 6
+                    },
+                    {
+                        label: "選項 B：拿起來看一看，然後隨手放在旁邊放牙膏的架子上。",
+                        isCorrect: false,
+                        delta: -5,
+                        feedback: "藥局助理 NPC 提醒：「同學，不想買的東西要放回原本的位置喔，不然店員會找不到。」請重新選擇。"
+                    },
+                    {
+                        label: "選項 C：偷偷把外面的塑膠封膜撕開，看看裡面送什麼貼紙。",
+                        isCorrect: false,
+                        delta: -15,
+                        feedback: "藥局助理 NPC 嚴肅說：「同學，商品還沒結帳前不能拆封喔！盒子被撕破我們就沒辦法賣給別人了，這樣需要照價賠償。」請重新選擇。"
+                    }
+                ]
+            },
+            // --- 6: 第二關 - 藥師諮詢對話 ---
+            {
+                stepId: 6,
+                stageIndex: 2,
+                sceneKey: "pharmacy",
+                sceneTitle: "陽光社區藥局・調劑櫃檯",
+                sceneSubtitle: "第二關：社區藥局（禮貌對話）",
+                npcName: "專業藥師 NPC",
+                npcRole: "領藥與諮詢櫃檯",
+                npcEmoji: "👩‍⚕️",
+                npcText: "你好，請問要買什麼，還是要領藥呢？",
+                scenarioBadge: "情境 2-2：藥師諮詢對話",
+                question: "面對穿白袍的藥師，你應該怎麼有禮貌地說出你的需求？",
+                tip: "對專業人員說話時，加上「藥師您好」與清楚說出需求，最有禮貌喔！",
+                isScoredQuestion: false,
+                options: [
+                    {
+                        label: "選項 1：「藥師您好，我要拿這張處方箋領藥，還要買一盒 OK 繃。」",
+                        isCorrect: true,
+                        delta: 0,
+                        feedback: "藥師微笑點頭：「好的，請稍等一下，我馬上為你調配處方藥並拿 OK 繃給你！」",
+                        nextStep: 7
+                    },
+                    {
+                        label: "選項 2：「喂，幫我拿藥，還有那個貼傷口的。」",
+                        isCorrect: false,
+                        delta: -5,
+                        feedback: "系統提示：「對專業人員說話要加上稱謂與『請、謝謝』，會更有禮貌喔！」請重新選擇。"
+                    }
+                ]
+            },
+            // --- 7: 第二關 - 選擇題 4（場所功能確認） ---
+            {
+                stepId: 7,
+                stageIndex: 2,
+                sceneKey: "pharmacy",
+                sceneTitle: "陽光社區藥局・調劑櫃檯",
+                sceneSubtitle: "第二關：社區藥局（第 4 / 10 題）",
+                npcName: "專業藥師 NPC",
+                npcRole: "用藥安全衛教",
+                npcEmoji: "👩‍⚕️",
+                npcText: "這是你的藥，記得這包感冒藥一天吃三次，飯後吃喔！",
+                scenarioBadge: "情境 2-3：場所功能確認",
+                question: "藥師拿藥給你時，提醒你「這包感冒藥一天吃三次，飯後吃」。為什麼生病領藥要來藥局，而不是去超商？",
+                tip: "藥局有國家考試合格的專業藥師，能幫我們調配處方藥並指導正確吃藥。",
+                isScoredQuestion: true,
+                questionNum: 4,
+                options: [
+                    {
+                        label: "選項 A：因為藥局有專業的藥師可以調配處方藥，還會教我們怎麼正確吃藥。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "藥師 NPC 微笑點頭：「沒錯！用藥安全很重要，有問題隨時問藥師就對了。」",
+                        nextStep: 8
+                    },
+                    {
+                        label: "選項 B：因為藥局的東西全部都不用錢。",
+                        isCorrect: false,
+                        delta: -5,
+                        feedback: "系統提示：「藥局買東西還是要付錢的喔！來藥局最重要的原因是這裡有專業的『藥師』服務。」請重新選擇。"
+                    }
+                ]
+            },
+            // --- 8: 第三關 - 選擇題 5（夜市排隊與動線） ---
+            {
+                stepId: 8,
+                stageIndex: 3,
+                sceneKey: "nightmarket",
+                sceneTitle: "熱鬧台灣夜市",
+                sceneSubtitle: "第三關：台灣夜市（第 5 / 10 題）",
+                npcName: "飲料店老闆 NPC",
+                npcRole: "珍珠奶茶攤位",
+                npcEmoji: "🧋",
+                npcText: "帥哥／美女，要喝什麼？排隊的人請稍微靠邊站，不要擋到中間走路的人喔！",
+                scenarioBadge: "情境 3-1：夜市人潮動線禮儀",
+                question: "買飲料的人很多，排隊時應該怎麼站，才不會影響其他逛夜市的人？",
+                tip: "夜市人潮很多，排隊時要貼齊攤位旁邊站，把中間走道留給別人走。",
+                isScoredQuestion: true,
+                questionNum: 5,
+                options: [
+                    {
+                        label: "選項 A：順著攤位旁邊貼齊排隊，把中間的走道留給別人通行。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "系統提示：「太貼心了！排隊時靠邊站、不擋住主要走道，是逛夜市的最高禮儀。」",
+                        nextStep: 9
+                    },
+                    {
+                        label: "選項 B：跟朋友並排站在走道正中間聊天，叫別人自己繞路走。",
+                        isCorrect: false,
+                        delta: -10,
+                        feedback: "路人 NPC 皺眉說：「借過一下喔！你們站在路中間，大家都過不去了。」（系統提示：在人多的地方擋住走道容易發生推擠衝突喔！）請重新選擇。"
+                    }
+                ]
+            },
+            // --- 9: 第三關 - 選擇題 6（不隨意拿取與邊走邊吃禮儀） ---
+            {
+                stepId: 9,
+                stageIndex: 3,
+                sceneKey: "nightmarket",
+                sceneTitle: "熱鬧台灣夜市",
+                sceneSubtitle: "第三關：台灣夜市（第 6 / 10 題）",
+                npcName: "潮流公仔攤老闆 NPC",
+                npcRole: "公仔與手機殼攤位",
+                npcEmoji: "🧸",
+                npcText: "來看看喔！最新款的潮流公仔與手機殼，小心腳下地上有水漬喔！",
+                scenarioBadge: "情境 3-2：飲食與商品安全禮儀",
+                question: "你手上正拿著珍珠奶茶，看到旁邊攤位擺了很多酷炫的公仔，你該怎麼做？",
+                tip: "手上拿食物或飲料時，要把飲料拿穩，絕不能隨便觸摸別人的商品！",
+                isScoredQuestion: true,
+                questionNum: 6,
+                options: [
+                    {
+                        label: "選項 A：眼睛看就好，把手上的飲料拿穩，不要邊喝飲料邊伸手去摸攤位上的商品。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "系統提示：「做得好！手上拿食物或飲料時，更不能隨便觸摸別人的商品，萬一打翻弄髒要照價賠償喔！」",
+                        nextStep: 10
+                    },
+                    {
+                        label: "選項 B：直接把飲料放在老闆賣的公仔旁邊，然後伸手把公仔拿起來把玩。",
+                        isCorrect: false,
+                        delta: -10,
+                        feedback: "攤位老闆緊張喊道：「同學小心！飲料不要放在我的商品旁邊，打翻整盒公仔都毀了！」請重新選擇。"
+                    }
+                ]
+            },
+            // --- 10: 第四關 - 選擇題 7（內用入座與點餐流程） ---
+            {
+                stepId: 10,
+                stageIndex: 4,
+                sceneKey: "noodleshop",
+                sceneTitle: "巷口古早味麵店",
+                sceneSubtitle: "第四關：巷口麵店（第 7 / 10 題）",
+                npcName: "麵店老闆娘 NPC",
+                npcRole: "古早味麵店櫃檯",
+                npcEmoji: "🍜",
+                npcText: "內用先找位子坐喔！菜單在櫃檯旁邊，畫好拿來給我，吃完再結帳。",
+                scenarioBadge: "情境 4-1：內用找位子與畫單點餐",
+                question: "進到店裡準備內用，正確的步驟是什麼？",
+                tip: "先找已經擦乾淨的空桌坐下，畫好菜單再有禮貌地拿給老闆。",
+                isScoredQuestion: true,
+                questionNum: 7,
+                options: [
+                    {
+                        label: "選項 A：先找乾淨的空桌坐下（或等店員收拾好），拿菜單和筆畫好要吃的餐點，再拿給老闆並說聲「麻煩您了」。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "老闆娘微笑說：「好喔，乾麵一份馬上幫你做，先坐一下！」（系統提示：看清楚店家的點餐規則，有禮貌地遞交菜單，大家都會很喜歡你。）",
+                        nextStep: 11
+                    },
+                    {
+                        label: "選項 B：直接站在店門口大喊：「老闆我要一碗乾麵！快一點！」然後隨便坐到別人還沒吃完的桌子上。",
+                        isCorrect: false,
+                        delta: -10,
+                        feedback: "系統提示：「在餐廳大聲喊叫會嚇到其他客人，而且不能隨便坐到別人還沒離開的座位喔！」請重新選擇。"
+                    }
+                ]
+            },
+            // --- 11: 第四關 - 選擇題 8（餐飲場所禮儀） ---
+            {
+                stepId: 11,
+                stageIndex: 4,
+                sceneKey: "noodleshop",
+                sceneTitle: "巷口古早味麵店",
+                sceneSubtitle: "第四關：巷口麵店（第 8 / 10 題）",
+                npcName: "共桌上班族客人 NPC",
+                npcRole: "內用用餐區",
+                npcEmoji: "💼",
+                npcText: "（正在安靜地看手機、享用午餐...）",
+                scenarioBadge: "情境 4-2：餐具拿取與共桌音量禮儀",
+                question: "等餐和吃麵的時候，下列哪一種行為最符合用餐禮儀？",
+                tip: "自助區的餐具拿自己夠用的數量就好，在室內看手機要戴耳機或關小聲。",
+                isScoredQuestion: true,
+                questionNum: 8,
+                options: [
+                    {
+                        label: "選項 A：拿自己需要的餐具數量就好，看手機影片時戴上耳機（或把音量轉到最小），不影響對面的客人。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "系統提示：「非常棒！節約使用免費餐具、在室內降低手機音量，展現了很棒的公民素養！」",
+                        nextStep: 12
+                    },
+                    {
+                        label: "選項 B：一次抓一大把衛生紙和免洗筷放在桌上，並把手機影片聲音開到最大聲。",
+                        isCorrect: false,
+                        delta: -10,
+                        feedback: "對面客人抬頭看你（系統提示：在餐廳內用要降低音量，而且自助區的餐具夠用就好，不能浪費喔！）請重新選擇。"
+                    }
+                ]
+            },
+            // --- 12: 第五關 - 選擇題 9（公園環境禮儀） ---
+            {
+                stepId: 12,
+                stageIndex: 5,
+                sceneKey: "park",
+                sceneTitle: "綠意社區公園",
+                sceneSubtitle: "第五關：社區公園（第 9 / 10 題）",
+                npcName: "運動的阿伯 NPC",
+                npcRole: "社區公園涼亭旁",
+                npcEmoji: "👴",
+                npcText: "年輕人，天氣真好啊！涼亭那邊有設置『一般垃圾』和『資源回收』分類桶喔！",
+                scenarioBadge: "情境 5-1：公共環境維護（垃圾處理）",
+                question: "飲料喝完了，手上拿著空杯子和吸管，你應該怎麼處理？",
+                tip: "垃圾不落地，多走幾步路把吸管（一般垃圾）和塑膠杯（資源回收）分開丟好。",
+                isScoredQuestion: true,
+                questionNum: 9,
+                options: [
+                    {
+                        label: "選項 A：多走幾步路到涼亭旁的分類垃圾桶，把吸管和杯子分開丟進正確的桶子裡。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "運動的阿伯 NPC 稱讚道：「年輕人很棒喔，懂得垃圾分類不亂丟！」（系統提示：公園是大家共用的休息場所，隨手帶走垃圾才能保持環境整潔。）",
+                        nextStep: 13
+                    },
+                    {
+                        label: "選項 B：直接把空杯子放在公園長椅上，反正等一下清潔人員會來收。",
+                        isCorrect: false,
+                        delta: -10,
+                        feedback: "系統提示：「把垃圾留在椅子上會引來螞蟻和蚊蟲，也會讓下一個人沒辦法坐喔！」請重新選擇。"
+                    }
+                ]
+            },
+            // --- 13: 第五關 - 選擇題 10（設施年齡限制與社交禮儀） ---
+            {
+                stepId: 13,
+                stageIndex: 5,
+                sceneKey: "park",
+                sceneTitle: "綠意社區公園",
+                sceneSubtitle: "第五關：社區公園（第 10 / 10 題）",
+                npcName: "帶孫子的阿嬤 NPC",
+                npcRole: "兒童遊戲區旁",
+                npcEmoji: "👵",
+                npcText: "小朋友排好隊喔，一個一個慢慢溜下來～",
+                scenarioBadge: "情境 5-2：公園設施使用與社交界線",
+                question: "高職生的你來到公園想活動一下，看到「限 12 歲以下兒童使用」的溜滑梯，以及旁邊的「成人健走器」，你應該怎麼選擇？",
+                tip: "高職生已經長大了，要使用適合青少年與成人的健走器或籃球場，禮讓小朋友喔！",
+                isScoredQuestion: true,
+                questionNum: 10,
+                options: [
+                    {
+                        label: "選項 A：使用適合青少年與成人的「健走器」或去「籃球場」運動，不跟小小朋友搶遊樂器材。",
+                        isCorrect: true,
+                        delta: 10,
+                        feedback: "系統提示：「完全正確！高職生體型已經長大了，選擇適合自己年齡的器材，既安全又懂得禮讓小朋友！」",
+                        nextStep: 14
+                    },
+                    {
+                        label: "選項 B：直接爬上兒童溜滑梯用力溜下來，把小朋友擠開。",
+                        isCorrect: false,
+                        delta: -10,
+                        feedback: "帶孫子的阿嬤提醒：「同學，這個溜滑梯是給小小孩玩的，你太高大了，玩這個會弄壞器材也會撞到小朋友喔！」請重新選擇。"
+                    }
+                ]
+            },
+            // --- 14: 五關全破結算總評（導覽員：阿凱） ---
+            {
+                stepId: 14,
+                stageIndex: 6,
+                sceneKey: "award",
+                sceneTitle: "獨立生活認證頒獎台",
+                sceneSubtitle: "五關全破結算總評",
+                npcName: "認證導覽員「阿凱」",
+                npcRole: "陽光社區認證中心",
+                npcEmoji: "🏆",
+                npcText: "", // 動態依據分數生成
+                scenarioBadge: "認證總成績單",
+                question: "", // 動態依據分數生成
+                tip: "你可以點擊下方「再挑戰一次」，繼續練習拿滿分喔！",
+                isScoredQuestion: false,
+                isEnding: true,
+                options: [
+                    { label: "再挑戰一次！", isCorrect: true, delta: 0, feedback: "", nextStep: 0 }
+                ]
+            }
+        ];
+
+        // =========================================================================
+        // 2. 遊戲全域狀態管理
+        // =========================================================================
+        let gameState = {
+            currentStep: 0,
+            score: 0,
+            mode: 'learning', // 'learning' | 'practice' | 'challenge'
+            isMuted: false,
+            speechRate: 0.95,
+            isLocked: false, // 350ms 防連點鎖定
+            completedQuestions: new Set(), // 記錄已答對的題號 (1~10)，確保答對該題加分一次
+            currentDisplayedOptions: [] // 儲存當前渲染順序的選項（支援挑戰模式隨機）
+        };
+
+        // =========================================================================
+        // 3. Web Audio API 溫和音效合成系統（絕無刺耳蜂鳴聲）
+        // =========================================================================
+        let audioCtx = null;
+
+        function ensureAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass) {
+                    audioCtx = new AudioContextClass();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // 播放溫和清脆鼓勵音效（上升大三和弦風鈴聲）
+        function playSuccessSound() {
+            if (gameState.isMuted) return;
+            try {
+                ensureAudioContext();
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime;
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+
+                    gain.gain.setValueAtTime(0.001, now + idx * 0.09);
+                    gain.gain.exponentialRampToValueAtTime(0.14, now + idx * 0.09 + 0.03);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.09 + 0.45);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.09);
+                    osc.stop(now + idx * 0.09 + 0.46);
+                });
+            } catch (e) {
+                console.warn("音效播放略過:", e);
+            }
+        }
+
+        // 播放柔和引導提示音（溫潤雙音木琴感，非刺耳蜂鳴）
+        function playGentleHintSound() {
+            if (gameState.isMuted) return;
+            try {
+                ensureAudioContext();
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime;
+                const notes = [440, 392]; // A4 -> G4 柔和提醒
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+
+                    gain.gain.setValueAtTime(0.001, now + idx * 0.14);
+                    gain.gain.exponentialRampToValueAtTime(0.12, now + idx * 0.14 + 0.03);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.14 + 0.35);
+
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.14);
+                    osc.stop(now + idx * 0.14 + 0.36);
+                });
+            } catch (e) {
+                console.warn("提示音播放略過:", e);
+            }
+        }
+
+        // 播放一般按鈕輕觸音
+        function playTapSound() {
+            if (gameState.isMuted) return;
+            try {
+                ensureAudioContext();
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                gain.gain.setValueAtTime(0.06, now);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.09);
+            } catch (e) {}
+        }
+
+        // =========================================================================
+        // 4. Web Speech API (zh-TW 台灣國語語音朗讀系統)
+        // =========================================================================
+        let lastSpokenText = "";
+
+        function speakText(text) {
+            lastSpokenText = text;
+            if (gameState.isMuted) return;
+            if (!('speechSynthesis' in window)) return;
+            try {
+                window.speechSynthesis.cancel();
+                // 清理括號內輔助符號讓朗讀更自然流暢
+                const cleanText = text.replace(/[「」『』（）\(\)★]/g, ' ');
+                const utterance = new SpeechSynthesisUtterance(cleanText);
+                utterance.lang = 'zh-TW';
+                utterance.rate = gameState.speechRate;
+                utterance.pitch = 1.05;
+
+                // 優先挑選台灣國語語音
+                const voices = window.speechSynthesis.getVoices();
+                const twVoice = voices.find(v => v.lang.includes('zh-TW') || v.lang.includes('zh_TW'));
+                if (twVoice) {
+                    utterance.voice = twVoice;
+                }
+                window.speechSynthesis.speak(utterance);
+            } catch (e) {
+                console.warn("語音朗讀不可用:", e);
+            }
+        }
+
+        function replayCurrentSpeech() {
+            playTapSound();
+            if (gameState.isMuted) {
+                // 若目前靜音，點擊重聽則自動開啟語音並朗讀
+                toggleMute(false);
+            }
+            if (lastSpokenText) {
+                speakText(lastSpokenText);
+            }
+        }
+
+        function toggleMute(forceState) {
+            if (typeof forceState === 'boolean') {
+                gameState.isMuted = forceState;
+            } else {
+                gameState.isMuted = !gameState.isMuted;
+            }
+            const icon = document.getElementById('mute-icon');
+            const label = document.getElementById('mute-label');
+            if (gameState.isMuted) {
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                icon.textContent = '🔇';
+                label.textContent = '語音靜音';
+            } else {
+                icon.textContent = '🔊';
+                label.textContent = '語音開啟';
+            }
+        }
+
+        function updateSpeechRate(val) {
+            gameState.speechRate = parseFloat(val);
+            let desc = "適中";
+            if (gameState.speechRate <= 0.8) desc = "慢速清晰";
+            else if (gameState.speechRate >= 1.1) desc = "稍快";
+            document.getElementById('speech-rate-val').textContent = `${gameState.speechRate.toFixed(2)}x（${desc}）`;
+        }
+
+        // =========================================================================
+        // 5. Three.js 3D 低多邊形 (Low-Poly) 溫馨台灣社區場景建構引擎
+        // =========================================================================
+        let scene, camera, renderer, sceneGroup;
+        let interactiveMeshes = []; // 儲存可點擊的 3D 物件（如第一關街道三棟建築）
+        let animatedCharacters = []; // 儲存需要呼吸/揮手動畫的 3D 角色
+        let cameraAngle = { theta: 0, phi: 0.32, radius: 16, targetY: 2.2 };
+        let isDraggingCamera = false;
+        let prevMouse = { x: 0, y: 0 };
+        let raycaster = new THREE.Raycaster();
+        let mouseVec = new THREE.Vector2();
+        let pointerDownPos = { x: 0, y: 0 };
+
+        function initThreeJS() {
+            const container = document.getElementById('three-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xdbeafe);
+            scene.fog = new THREE.FogExp2(0xdbeafe, 0.016);
+
+            camera = new THREE.PerspectiveCamera(46, container.clientWidth / container.clientHeight, 0.1, 200);
+            updateCameraPosition();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // 明亮溫馨的太陽與環境光源
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.72);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xfffbeb, 0.85);
+            dirLight.position.set(14, 24, 16);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.near = 2;
+            dirLight.shadow.camera.far = 60;
+            const d = 22;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+
+            sceneGroup = new THREE.Group();
+            scene.add(sceneGroup);
+
+            // 綁定視角拖曳與點擊互動（支援滑鼠與觸控）
+            const dom = renderer.domElement;
+            dom.addEventListener('pointerdown', onPointerDown);
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function updateCameraPosition() {
+            if (!camera) return;
+            const x = cameraAngle.radius * Math.sin(cameraAngle.theta) * Math.cos(cameraAngle.phi);
+            const y = cameraAngle.targetY + cameraAngle.radius * Math.sin(cameraAngle.phi);
+            const z = cameraAngle.radius * Math.cos(cameraAngle.theta) * Math.cos(cameraAngle.phi);
+            camera.position.set(x, Math.max(2.5, y), z);
+            camera.lookAt(0, cameraAngle.targetY, 0);
+        }
+
+        function onPointerDown(e) {
+            isDraggingCamera = true;
+            prevMouse = { x: e.clientX, y: e.clientY };
+            pointerDownPos = { x: e.clientX, y: e.clientY };
+        }
+
+        function onPointerMove(e) {
+            if (!isDraggingCamera) return;
+            const dx = e.clientX - prevMouse.x;
+            const dy = e.clientY - prevMouse.y;
+            prevMouse = { x: e.clientX, y: e.clientY };
+
+            cameraAngle.theta -= dx * 0.008;
+            // 限制水平旋轉角度於正面 -55度 ~ +55度，避免轉到建築物背面迷失方向
+            cameraAngle.theta = Math.max(-0.95, Math.min(0.95, cameraAngle.theta));
+            cameraAngle.phi = Math.max(0.15, Math.min(0.75, cameraAngle.phi + dy * 0.006));
+            updateCameraPosition();
+        }
+
+        function onPointerUp(e) {
+            if (!isDraggingCamera) return;
+            isDraggingCamera = false;
+
+            // 判斷是否為點擊（位移小於 8px）
+            const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+            if (dist < 8 && interactiveMeshes.length > 0) {
+                const container = document.getElementById('three-container');
+                const rect = container.getBoundingClientRect();
+                if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                    mouseVec.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                    mouseVec.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                    raycaster.setFromCamera(mouseVec, camera);
+                    const intersects = raycaster.intersectObjects(interactiveMeshes, true);
+                    if (intersects.length > 0) {
+                        let obj = intersects[0].object;
+                        while (obj && !obj.userData.buildingId) {
+                            obj = obj.parent;
+                        }
+                        if (obj && obj.userData.buildingId) {
+                            handle3DBuildingClick(obj.userData.buildingId);
+                        }
+                    }
+                }
+            }
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('three-container');
+            if (!container || !renderer || !camera) return;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // 建立文字貼圖看板輔助函式（讓 3D 場景中的台灣招牌一目瞭然）
+        function createSignTexture(text, bgColor, textColor, borderColor = null, subText = "") {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 192;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, 512, 192);
+
+            if (borderColor) {
+                ctx.strokeStyle = borderColor;
+                ctx.lineWidth = 16;
+                ctx.strokeRect(8, 8, 496, 176);
+            }
+
+            ctx.fillStyle = textColor;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = '900 54px "Noto Sans TC", sans-serif';
+            ctx.fillText(text, 256, subText ? 74 : 96);
+
+            if (subText) {
+                ctx.font = '700 32px "Noto Sans TC", sans-serif';
+                ctx.fillText(subText, 256, 140);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            return tex;
+        }
+
+        // 建立親切的低多邊形 (Low-Poly) 3D 人物模型
+        function createLowPolyPerson(options = {}) {
+            const {
+                shirtColor = 0x3b82f6,
+                pantsColor = 0x1e293b,
+                skinColor = 0xfde68a,
+                hairColor = 0x1f2937,
+                hasApron = false,
+                apronColor = 0x10b981,
+                isWhiteCoat = false,
+                isChild = false,
+                hasBag = false,
+                waveArm = false
+            } = options;
+
+            const person = new THREE.Group();
+            const scale = isChild ? 0.68 : 1.0;
+
+            // 腿部
+            const legGeo = new THREE.CylinderGeometry(0.16, 0.14, 1.0, 8);
+            const legMat = new THREE.MeshLambertMaterial({ color: pantsColor });
+            const leftLeg = new THREE.Mesh(legGeo, legMat);
+            leftLeg.position.set(-0.2, 0.5, 0);
+            leftLeg.castShadow = true;
+            person.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeo, legMat);
+            rightLeg.position.set(0.2, 0.5, 0);
+            rightLeg.castShadow = true;
+            person.add(rightLeg);
+
+            // 身體（上衣）
+            const torsoGeo = new THREE.CylinderGeometry(0.36, 0.32, 1.15, 10);
+            const torsoMat = new THREE.MeshLambertMaterial({ color: isWhiteCoat ? 0xffffff : shirtColor });
+            const torso = new THREE.Mesh(torsoGeo, torsoMat);
+            torso.position.set(0, 1.55, 0);
+            torso.castShadow = true;
+            person.add(torso);
+
+            // 圍裙（店員/老闆）
+            if (hasApron) {
+                const apronGeo = new THREE.BoxGeometry(0.56, 0.95, 0.12);
+                const apronMat = new THREE.MeshLambertMaterial({ color: apronColor });
+                const apron = new THREE.Mesh(apronGeo, apronMat);
+                apron.position.set(0, 1.45, 0.28);
+                person.add(apron);
+            }
+
+            // 頭部
+            const headGeo = new THREE.SphereGeometry(0.36, 14, 14);
+            const headMat = new THREE.MeshLambertMaterial({ color: skinColor });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.set(0, 2.48, 0);
+            head.castShadow = true;
+            person.add(head);
+
+            // 頭髮（半圓帽狀）
+            const hairGeo = new THREE.SphereGeometry(0.38, 14, 14, 0, Math.PI * 2, 0, Math.PI * 0.55);
+            const hairMat = new THREE.MeshLambertMaterial({ color: hairColor });
+            const hair = new THREE.Mesh(hairGeo, hairMat);
+            hair.position.set(0, 2.52, -0.02);
+            hair.rotation.x = -0.15;
+            person.add(hair);
+
+            // 眼睛（親切大眼）
+            const eyeGeo = new THREE.SphereGeometry(0.045, 8, 8);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111827 });
+            const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeL.position.set(-0.12, 2.48, 0.33);
+            const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeR.position.set(0.12, 2.48, 0.33);
+            person.add(eyeL, eyeR);
+
+            // 手臂
+            const armGeo = new THREE.CylinderGeometry(0.11, 0.1, 0.9, 8);
+            const armMat = new THREE.MeshLambertMaterial({ color: isWhiteCoat ? 0xffffff : shirtColor });
+
+            const leftArm = new THREE.Mesh(armGeo, armMat);
+            leftArm.position.set(-0.48, 1.55, 0);
+            leftArm.rotation.z = 0.15;
+            person.add(leftArm);
+
+            const rightArmPivot = new THREE.Group();
+            rightArmPivot.position.set(0.48, 1.95, 0);
+            const rightArm = new THREE.Mesh(armGeo, armMat);
+            rightArm.position.set(0, -0.4, 0);
+            rightArmPivot.add(rightArm);
+            person.add(rightArmPivot);
+
+            if (waveArm) {
+                rightArmPivot.rotation.z = 2.4;
+            }
+
+            if (hasBag) {
+                const bagGeo = new THREE.BoxGeometry(0.32, 0.36, 0.18);
+                const bagMat = new THREE.MeshLambertMaterial({ color: 0xf59e0b });
+                const bag = new THREE.Mesh(bagGeo, bagMat);
+                bag.position.set(-0.55, 1.0, 0.15);
+                person.add(bag);
+            }
+
+            person.scale.set(scale, scale, scale);
+            person.userData.rightArmPivot = rightArmPivot;
+            person.userData.waveArm = waveArm;
+            person.userData.baseY = 0;
+            animatedCharacters.push(person);
+            return person;
+        }
+
+        // 建立台灣社區低多邊形樹木
+        function createLowPolyTree(x, z, scale = 1) {
+            const tree = new THREE.Group();
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.25, 0.35, 1.6, 7),
+                new THREE.MeshLambertMaterial({ color: 0x78350f })
+            );
+            trunk.position.y = 0.8;
+            trunk.castShadow = true;
+            tree.add(trunk);
+
+            const leavesMat = new THREE.MeshLambertMaterial({ color: 0x22c55e });
+            const c1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.25, 0), leavesMat);
+            c1.position.y = 2.3;
+            c1.castShadow = true;
+            const c2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.95, 0), new THREE.MeshLambertMaterial({ color: 0x4ade80 }));
+            c2.position.set(0.4, 3.1, 0.2);
+            tree.add(c1, c2);
+
+            tree.position.set(x, 0, z);
+            tree.scale.set(scale, scale, scale);
+            return tree;
+        }
+
+        // 清空並切換 3D 場景
+        function build3DScene(sceneKey) {
+            if (!sceneGroup) return;
+            while (sceneGroup.children.length > 0) {
+                sceneGroup.remove(sceneGroup.children[0]);
+            }
+            interactiveMeshes = [];
+            animatedCharacters = [];
+
+            // 重置預設攝影機角度
+            cameraAngle = { theta: 0, phi: 0.32, radius: 15.5, targetY: 2.0 };
+            updateCameraPosition();
+
+            const tipEl = document.getElementById('interactive-3d-tip');
+            if (tipEl) tipEl.classList.add('hidden');
+
+            if (sceneKey === 'gate') {
+                // --- 場景 0：陽光社區大門與學長德哥 ---
+                scene.background = new THREE.Color(0xbae6fd);
+                scene.fog = new THREE.FogExp2(0xbae6fd, 0.015);
+
+                // 草地與人行道
+                const grass = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshLambertMaterial({ color: 0x86efac }));
+                grass.rotation.x = -Math.PI / 2;
+                grass.receiveShadow = true;
+                sceneGroup.add(grass);
+
+                const road = new THREE.Mesh(new THREE.PlaneGeometry(8, 50), new THREE.MeshLambertMaterial({ color: 0xe2e8f0 }));
+                road.rotation.x = -Math.PI / 2;
+                road.position.y = 0.02;
+                road.receiveShadow = true;
+                sceneGroup.add(road);
+
+                // 社區拱門
+                const pillarGeo = new THREE.BoxGeometry(1.1, 5.2, 1.1);
+                const pillarMat = new THREE.MeshLambertMaterial({ color: 0xfef3c7 });
+                const leftPillar = new THREE.Mesh(pillarGeo, pillarMat);
+                leftPillar.position.set(-4.2, 2.6, -3);
+                leftPillar.castShadow = true;
+                const rightPillar = new THREE.Mesh(pillarGeo, pillarMat);
+                rightPillar.position.set(4.2, 2.6, -3);
+                rightPillar.castShadow = true;
+
+                const archBeam = new THREE.Mesh(
+                    new THREE.BoxGeometry(10.2, 1.4, 1.3),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("陽光社區", "#f59e0b", "#ffffff", "#fef3c7", "獨立生活認證中心") })
+                );
+                archBeam.position.set(0, 5.4, -3);
+                archBeam.castShadow = true;
+                sceneGroup.add(leftPillar, rightPillar, archBeam);
+
+                // 親切學長「德哥」（揮手歡迎）
+                const deGe = createLowPolyPerson({
+                    shirtColor: 0x0ea5e9,
+                    pantsColor: 0x334155,
+                    hasBag: true,
+                    waveArm: true
+                });
+                deGe.position.set(0, 0, 1.2);
+                deGe.scale.set(1.2, 1.2, 1.2);
+                sceneGroup.add(deGe);
+
+                // 兩側樹木
+                sceneGroup.add(createLowPolyTree(-7, -2, 1.1));
+                sceneGroup.add(createLowPolyTree(7, -2, 1.1));
+                sceneGroup.add(createLowPolyTree(-6.5, 4, 0.9));
+                sceneGroup.add(createLowPolyTree(6.5, 4, 0.9));
+
+            } else if (sceneKey === 'street') {
+                // --- 場景 1-1：街道三棟建築（可點擊互動辨識） ---
+                if (tipEl) tipEl.classList.remove('hidden');
+                cameraAngle = { theta: 0, phi: 0.3, radius: 18.5, targetY: 2.3 };
+                updateCameraPosition();
+
+                const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshLambertMaterial({ color: 0x94a3b8 }));
+                ground.rotation.x = -Math.PI / 2;
+                ground.receiveShadow = true;
+                sceneGroup.add(ground);
+
+                const sidewalk = new THREE.Mesh(new THREE.BoxGeometry(28, 0.15, 7), new THREE.MeshLambertMaterial({ color: 0xf1f5f9 }));
+                sidewalk.position.set(0, 0.075, -1);
+                sidewalk.receiveShadow = true;
+                sceneGroup.add(sidewalk);
+
+                // 建築 1（左側）：社區圖書館
+                const libGroup = new THREE.Group();
+                libGroup.userData.buildingId = 'library';
+                const libBody = new THREE.Mesh(new THREE.BoxGeometry(5.5, 4.8, 4.5), new THREE.MeshLambertMaterial({ color: 0xfde68a }));
+                libBody.position.y = 2.4;
+                libBody.castShadow = true;
+                const libRoof = new THREE.Mesh(new THREE.ConeGeometry(4.3, 1.8, 4), new THREE.MeshLambertMaterial({ color: 0xb45309 }));
+                libRoof.position.y = 5.7;
+                libRoof.rotation.y = Math.PI / 4;
+                const libSign = new THREE.Mesh(
+                    new THREE.BoxGeometry(4.8, 1.2, 0.3),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("社區圖書館", "#92400e", "#fef3c7", "#f59e0b", "📖 安靜閱讀區") })
+                );
+                libSign.position.set(0, 4.1, 2.3);
+                const libDoor = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.4, 0.2), new THREE.MeshLambertMaterial({ color: 0x78350f }));
+                libDoor.position.set(0, 1.2, 2.28);
+                libGroup.add(libBody, libRoof, libSign, libDoor);
+                libGroup.position.set(-7.5, 0, -4.5);
+                sceneGroup.add(libGroup);
+                interactiveMeshes.push(libGroup);
+
+                // 建築 2（中間）：24H 便利商店（橘綠紅經典配色）
+                const storeGroup = new THREE.Group();
+                storeGroup.userData.buildingId = 'store';
+                const storeBody = new THREE.Mesh(new THREE.BoxGeometry(6.2, 4.6, 4.5), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+                storeBody.position.y = 2.3;
+                storeBody.castShadow = true;
+                // 橘綠紅招牌條紋
+                const stripeOrange = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.45, 4.7), new THREE.MeshLambertMaterial({ color: 0xf97316 }));
+                stripeOrange.position.y = 4.6;
+                const stripeGreen = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.45, 4.7), new THREE.MeshLambertMaterial({ color: 0x16a34a }));
+                stripeGreen.position.y = 4.15;
+                const stripeRed = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.35, 4.7), new THREE.MeshLambertMaterial({ color: 0xdc2626 }));
+                stripeRed.position.y = 3.75;
+
+                const storeSign = new THREE.Mesh(
+                    new THREE.BoxGeometry(5.2, 1.25, 0.35),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("24H 便利商店", "#ea580c", "#ffffff", "#22c55e", "🍙 飯糰・繳費・飲料") })
+                );
+                storeSign.position.set(0, 4.2, 2.4);
+
+                const glassDoor = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.5, 0.2), new THREE.MeshLambertMaterial({ color: 0x7dd3fc }));
+                glassDoor.position.set(0, 1.25, 2.28);
+                storeGroup.add(storeBody, stripeOrange, stripeGreen, stripeRed, storeSign, glassDoor);
+                storeGroup.position.set(0, 0, -4.5);
+                sceneGroup.add(storeGroup);
+                interactiveMeshes.push(storeGroup);
+
+                // 建築 3（右側）：綠色十字社區藥局
+                const pharmGroup = new THREE.Group();
+                pharmGroup.userData.buildingId = 'pharmacy';
+                const pharmBody = new THREE.Mesh(new THREE.BoxGeometry(5.5, 4.6, 4.5), new THREE.MeshLambertMaterial({ color: 0xecfdf5 }));
+                pharmBody.position.y = 2.3;
+                pharmBody.castShadow = true;
+                const pharmSign = new THREE.Mesh(
+                    new THREE.BoxGeometry(4.8, 1.25, 0.35),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("✚ 社區藥局", "#059669", "#ffffff", "#a7f3d0", "處方箋領藥・保健") })
+                );
+                pharmSign.position.set(0, 4.1, 2.3);
+                const pharmDoor = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.4, 0.2), new THREE.MeshLambertMaterial({ color: 0x34d399 }));
+                pharmDoor.position.set(0, 1.2, 2.28);
+                pharmGroup.add(pharmBody, pharmSign, pharmDoor);
+                pharmGroup.position.set(7.5, 0, -4.5);
+                sceneGroup.add(pharmGroup);
+                interactiveMeshes.push(pharmGroup);
+
+                // 德哥站在街道前方引導
+                const deGe = createLowPolyPerson({ shirtColor: 0x0ea5e9, waveArm: true });
+                deGe.position.set(-4.5, 0, 2.2);
+                sceneGroup.add(deGe);
+
+            } else if (sceneKey === 'store_interior') {
+                // --- 場景 1-2 & 1-3：便利商店內部（櫃檯、黃色等候線、店員、A小姐、B先生） ---
+                cameraAngle = { theta: 0.25, phi: 0.38, radius: 13.5, targetY: 1.8 };
+                updateCameraPosition();
+
+                const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), new THREE.MeshLambertMaterial({ color: 0xf8fafc }));
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                sceneGroup.add(floor);
+
+                // 後牆與側牆
+                const backWall = new THREE.Mesh(new THREE.BoxGeometry(20, 6, 0.5), new THREE.MeshLambertMaterial({ color: 0xffedd5 }));
+                backWall.position.set(0, 3, -6);
+                sceneGroup.add(backWall);
+
+                // 結帳櫃檯
+                const counter = new THREE.Mesh(new THREE.BoxGeometry(6.5, 1.35, 1.6), new THREE.MeshLambertMaterial({ color: 0xf97316 }));
+                counter.position.set(0, 0.675, -3.2);
+                counter.castShadow = true;
+                sceneGroup.add(counter);
+
+                // 收銀機
+                const posMachine = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.7, 0.7), new THREE.MeshLambertMaterial({ color: 0x334155 }));
+                posMachine.position.set(-0.5, 1.7, -3.2);
+                sceneGroup.add(posMachine);
+
+                // 地上醒目的黃色排隊等候線
+                const yellowLine = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 6.5), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
+                yellowLine.rotation.x = -Math.PI / 2;
+                yellowLine.position.set(0, 0.02, 1.2);
+                sceneGroup.add(yellowLine);
+
+                // 超商店員 NPC
+                const clerk = createLowPolyPerson({ shirtColor: 0xffffff, hasApron: true, apronColor: 0x16a34a, waveArm: true });
+                clerk.position.set(0, 0, -4.4);
+                sceneGroup.add(clerk);
+
+                // 排隊客人 A 小姐（最前面）
+                const ladyA = createLowPolyPerson({ shirtColor: 0xf43f5e, pantsColor: 0x475569 });
+                ladyA.position.set(0, 0, -1.5);
+                ladyA.rotation.y = Math.PI;
+                sceneGroup.add(ladyA);
+
+                // 排隊客人 B 先生（第二位）
+                const mrB = createLowPolyPerson({ shirtColor: 0x2563eb, pantsColor: 0x1e293b });
+                mrB.position.set(0, 0, 0.5);
+                mrB.rotation.y = Math.PI;
+                sceneGroup.add(mrB);
+
+                // 右側商品貨架（飯糰與飲料）
+                const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.4, 3.2, 6), new THREE.MeshLambertMaterial({ color: 0x64748b }));
+                shelf.position.set(5.5, 1.6, -1);
+                sceneGroup.add(shelf);
+
+            } else if (sceneKey === 'pharmacy') {
+                // --- 場景 2：社區藥局內部（白袍藥師、調劑台、可愛動漫軟糖貨架） ---
+                cameraAngle = { theta: -0.2, phi: 0.35, radius: 13.5, targetY: 1.8 };
+                updateCameraPosition();
+
+                const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), new THREE.MeshLambertMaterial({ color: 0xecfdf5 }));
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                sceneGroup.add(floor);
+
+                const backWall = new THREE.Mesh(new THREE.BoxGeometry(20, 6, 0.5), new THREE.MeshLambertMaterial({ color: 0xd1fae5 }));
+                backWall.position.set(0, 3, -6);
+                sceneGroup.add(backWall);
+
+                // 調劑櫃檯與領藥處招牌
+                const counter = new THREE.Mesh(new THREE.BoxGeometry(6.5, 1.35, 1.6), new THREE.MeshLambertMaterial({ color: 0x10b981 }));
+                counter.position.set(-1.5, 0.675, -3.2);
+                sceneGroup.add(counter);
+
+                const rxSign = new THREE.Mesh(
+                    new THREE.BoxGeometry(4.5, 1.1, 0.2),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("✚ 處方箋領藥櫃檯", "#047857", "#ffffff") })
+                );
+                rxSign.position.set(-1.5, 4.3, -5.6);
+                sceneGroup.add(rxSign);
+
+                // 白袍藥師 NPC
+                const pharmacist = createLowPolyPerson({ isWhiteCoat: true, pantsColor: 0x334155, waveArm: true });
+                pharmacist.position.set(-1.5, 0, -4.4);
+                sceneGroup.add(pharmacist);
+
+                // 藥局助理 NPC
+                const assistant = createLowPolyPerson({ shirtColor: 0x34d399, pantsColor: 0x334155 });
+                assistant.position.set(3.8, 0, -2.5);
+                sceneGroup.add(assistant);
+
+                // 右側商品貨架（放著彩色聯名動漫軟糖與 OK 繃）
+                const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 5.5), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+                shelf.position.set(5.2, 1.5, -0.5);
+                sceneGroup.add(shelf);
+
+                // 亮眼粉紫色的動漫造型維他命軟糖盒
+                const candyColors = [0xf472b6, 0xc084fc, 0xfacc15];
+                for (let i = 0; i < 6; i++) {
+                    const box = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.45, 0.45, 0.45),
+                        new THREE.MeshLambertMaterial({ color: candyColors[i % 3] })
+                    );
+                    box.position.set(4.5, 1.8 + Math.floor(i / 3) * 0.65, -1.5 + (i % 3) * 0.8);
+                    sceneGroup.add(box);
+                }
+
+            } else if (sceneKey === 'nightmarket') {
+                // --- 場景 3：台灣夜市（紅燈籠、珍珠奶茶攤、鹽酥雞攤、公仔攤、行走動線） ---
+                cameraAngle = { theta: 0, phi: 0.34, radius: 16.5, targetY: 2.1 };
+                updateCameraPosition();
+
+                scene.background = new THREE.Color(0x1e1b4b);
+                scene.fog = new THREE.FogExp2(0x1e1b4b, 0.014);
+
+                // 夜市柏油地面與黃色行走動線
+                const road = new THREE.Mesh(new THREE.PlaneGeometry(24, 34), new THREE.MeshLambertMaterial({ color: 0x334155 }));
+                road.rotation.x = -Math.PI / 2;
+                road.receiveShadow = true;
+                sceneGroup.add(road);
+
+                const walkLane = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 26), new THREE.MeshBasicMaterial({ color: 0x475569 }));
+                walkLane.rotation.x = -Math.PI / 2;
+                walkLane.position.set(0, 0.02, 0);
+                sceneGroup.add(walkLane);
+
+                // 紅燈籠串
+                for (let z = -8; z <= 6; z += 3.5) {
+                    for (let x = -4.5; x <= 4.5; x += 3) {
+                        const lantern = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.42, 12, 12),
+                            new THREE.MeshBasicMaterial({ color: 0xef4444 })
+                        );
+                        lantern.position.set(x, 5.4, z);
+                        sceneGroup.add(lantern);
+                    }
+                }
+
+                // 左側攤位 1：珍珠奶茶攤
+                const bobaStall = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.3, 4.5), new THREE.MeshLambertMaterial({ color: 0xf59e0b }));
+                bobaStall.position.set(-5.8, 0.65, -2.5);
+                const bobaSign = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 1.1, 4.2),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("🧋 珍珠奶茶", "#d97706", "#ffffff") })
+                );
+                bobaSign.position.set(-5.8, 3.8, -2.5);
+                sceneGroup.add(bobaStall, bobaSign);
+
+                // 飲料店老闆 NPC
+                const bobaBoss = createLowPolyPerson({ shirtColor: 0xfbbf24, hasApron: true, apronColor: 0x78350f, waveArm: true });
+                bobaBoss.position.set(-7.6, 0, -2.5);
+                bobaBoss.rotation.y = Math.PI / 2;
+                sceneGroup.add(bobaBoss);
+
+                // 右側攤位 2：潮流公仔與手機殼攤
+                const toyStall = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.3, 4.5), new THREE.MeshLambertMaterial({ color: 0x3b82f6 }));
+                toyStall.position.set(5.8, 0.65, -1.5);
+                const toySign = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 1.1, 4.2),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("🧸 潮流公仔攤", "#1d4ed8", "#ffffff") })
+                );
+                toySign.position.set(5.8, 3.8, -1.5);
+                sceneGroup.add(toyStall, toySign);
+
+                // 攤位上的公仔展示盒
+                for (let i = 0; i < 4; i++) {
+                    const fig = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.55, 0.65, 0.55),
+                        new THREE.MeshLambertMaterial({ color: i % 2 === 0 ? 0xf43f5e : 0x38bdf8 })
+                    );
+                    fig.position.set(5.2, 1.65, -2.8 + i * 0.9);
+                    sceneGroup.add(fig);
+                }
+
+                // 公仔攤老闆與逛街路人
+                const toyBoss = createLowPolyPerson({ shirtColor: 0x60a5fa });
+                toyBoss.position.set(7.6, 0, -1.5);
+                toyBoss.rotation.y = -Math.PI / 2;
+                sceneGroup.add(toyBoss);
+
+                const passerby = createLowPolyPerson({ shirtColor: 0xa855f7 });
+                passerby.position.set(0.4, 0, 2.5);
+                sceneGroup.add(passerby);
+
+            } else if (sceneKey === 'noodleshop') {
+                // --- 場景 4：巷口古早味麵店（內用桌椅、自助餐具區、老闆娘、共桌客人） ---
+                cameraAngle = { theta: 0.15, phi: 0.38, radius: 14.5, targetY: 1.8 };
+                updateCameraPosition();
+
+                const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), new THREE.MeshLambertMaterial({ color: 0xfef3c7 }));
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                sceneGroup.add(floor);
+
+                const backWall = new THREE.Mesh(new THREE.BoxGeometry(20, 6, 0.5), new THREE.MeshLambertMaterial({ color: 0xfde68a }));
+                backWall.position.set(0, 3, -6);
+                sceneGroup.add(backWall);
+
+                // 古早味麵店招牌與煮麵台
+                const noodleSign = new THREE.Mesh(
+                    new THREE.BoxGeometry(5.5, 1.2, 0.25),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("🍜 古早味麵店", "#b91c1c", "#fef3c7", "#f59e0b") })
+                );
+                noodleSign.position.set(-2.5, 4.4, -5.6);
+                const stall = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.4, 1.6), new THREE.MeshLambertMaterial({ color: 0xd97706 }));
+                stall.position.set(-2.5, 0.7, -3.5);
+                sceneGroup.add(noodleSign, stall);
+
+                // 麵店老闆娘 NPC
+                const bossLady = createLowPolyPerson({ shirtColor: 0xf43f5e, hasApron: true, apronColor: 0xffffff, waveArm: true });
+                bossLady.position.set(-2.5, 0, -4.6);
+                sceneGroup.add(bossLady);
+
+                // 左前桌：已擦乾淨的雙人桌
+                const cleanTable = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.15, 1.6), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+                cleanTable.position.set(-3.2, 1.0, 1.2);
+                const cleanLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.0, 8), new THREE.MeshLambertMaterial({ color: 0x475569 }));
+                cleanLeg.position.set(-3.2, 0.5, 1.2);
+                sceneGroup.add(cleanTable, cleanLeg);
+
+                // 右前桌：共桌上班族客人正在用餐
+                const sharedTable = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.15, 1.8), new THREE.MeshLambertMaterial({ color: 0xfbbf24 }));
+                sharedTable.position.set(2.8, 1.0, 1.2);
+                const sharedLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.0, 8), new THREE.MeshLambertMaterial({ color: 0x475569 }));
+                sharedLeg.position.set(2.8, 0.5, 1.2);
+                sceneGroup.add(sharedTable, sharedLeg);
+
+                const worker = createLowPolyPerson({ shirtColor: 0x3b82f6, pantsColor: 0x1e293b });
+                worker.position.set(2.8, 0, 0.1);
+                sceneGroup.add(worker);
+
+                // 自助餐具區
+                const utensilBox = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, 1.0), new THREE.MeshLambertMaterial({ color: 0x94a3b8 }));
+                utensilBox.position.set(4.5, 0.65, -3.5);
+                sceneGroup.add(utensilBox);
+
+            } else if (sceneKey === 'park') {
+                // --- 場景 5：綠意社區公園（涼亭、分類垃圾桶、兒童溜滑梯、成人健走器） ---
+                cameraAngle = { theta: 0, phi: 0.34, radius: 17.5, targetY: 2.0 };
+                updateCameraPosition();
+
+                const grass = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), new THREE.MeshLambertMaterial({ color: 0x4ade80 }));
+                grass.rotation.x = -Math.PI / 2;
+                grass.receiveShadow = true;
+                sceneGroup.add(grass);
+
+                const path = new THREE.Mesh(new THREE.PlaneGeometry(22, 4.5), new THREE.MeshLambertMaterial({ color: 0xfef3c7 }));
+                path.rotation.x = -Math.PI / 2;
+                path.position.set(0, 0.02, 1.5);
+                sceneGroup.add(path);
+
+                // 木頭長椅
+                const bench = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.65, 1.0), new THREE.MeshLambertMaterial({ color: 0x92400e }));
+                bench.position.set(-5.5, 0.325, 0.5);
+                sceneGroup.add(bench);
+
+                // 分類垃圾桶（一般垃圾灰桶 + 資源回收藍桶）
+                const binGeneral = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.4, 1.25, 12), new THREE.MeshLambertMaterial({ color: 0x475569 }));
+                binGeneral.position.set(-1.5, 0.625, -1.5);
+                const binRecycle = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.4, 1.25, 12), new THREE.MeshLambertMaterial({ color: 0x2563eb }));
+                binRecycle.position.set(-0.4, 0.625, -1.5);
+                const binSign = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.6, 0.85, 0.15),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("♻️ 垃圾分類桶", "#1d4ed8", "#ffffff") })
+                );
+                binSign.position.set(-0.95, 2.0, -1.5);
+                sceneGroup.add(binGeneral, binRecycle, binSign);
+
+                // 兒童溜滑梯區（限 12 歲以下）
+                const slideTower = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.4, 1.6), new THREE.MeshLambertMaterial({ color: 0xfacc15 }));
+                slideTower.position.set(3.5, 1.2, -3.0);
+                const slideRamp = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.2, 3.0), new THREE.MeshLambertMaterial({ color: 0xf43f5e }));
+                slideRamp.position.set(3.5, 1.1, -1.2);
+                slideRamp.rotation.x = 0.65;
+                sceneGroup.add(slideTower, slideRamp);
+
+                // 成人健走器（黃藍配色）
+                const walkerBase = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.5, 1.2), new THREE.MeshLambertMaterial({ color: 0x0ea5e9 }));
+                walkerBase.position.set(7.2, 1.25, -2.5);
+                sceneGroup.add(walkerBase);
+
+                // 運動阿伯、帶孫子阿嬤與小朋友 NPC
+                const uncle = createLowPolyPerson({ shirtColor: 0xffffff, pantsColor: 0x334155, waveArm: true });
+                uncle.position.set(-3.2, 0, -1.2);
+                const grandma = createLowPolyPerson({ shirtColor: 0xc084fc, pantsColor: 0x334155 });
+                grandma.position.set(2.0, 0, -0.5);
+                const kid = createLowPolyPerson({ shirtColor: 0xfbbf24, isChild: true });
+                kid.position.set(3.5, 0, 0.8);
+                sceneGroup.add(uncle, grandma, kid);
+
+                sceneGroup.add(createLowPolyTree(-8, -5, 1.1));
+                sceneGroup.add(createLowPolyTree(8.5, -5.5, 1.2));
+
+            } else if (sceneKey === 'award') {
+                // --- 場景 6：五關全破結算頒獎台（導覽員阿凱登場） ---
+                cameraAngle = { theta: 0, phi: 0.28, radius: 13.5, targetY: 2.2 };
+                updateCameraPosition();
+
+                scene.background = new THREE.Color(0xfef3c7);
+                scene.fog = new THREE.FogExp2(0xfef3c7, 0.015);
+
+                const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshLambertMaterial({ color: 0xfde68a }));
+                floor.rotation.x = -Math.PI / 2;
+                sceneGroup.add(floor);
+
+                // 榮譽頒獎台
+                const podium = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.6, 0.8, 24), new THREE.MeshLambertMaterial({ color: 0xf59e0b }));
+                podium.position.set(0, 0.4, 0);
+                sceneGroup.add(podium);
+
+                const banner = new THREE.Mesh(
+                    new THREE.BoxGeometry(7.2, 1.6, 0.3),
+                    new THREE.MeshLambertMaterial({ map: createSignTexture("🏆 獨立生活認證完成！", "#d97706", "#ffffff", "#fef3c7", "陽光社區榮譽榜") })
+                );
+                banner.position.set(0, 4.8, -3.2);
+                sceneGroup.add(banner);
+
+                // 導覽員阿凱與學長德哥一起鼓掌慶祝
+                const aKai = createLowPolyPerson({ shirtColor: 0x10b981, pantsColor: 0x1e293b, waveArm: true });
+                aKai.position.set(-1.1, 0.8, 0.2);
+                aKai.scale.set(1.15, 1.15, 1.15);
+
+                const deGe = createLowPolyPerson({ shirtColor: 0x0ea5e9, pantsColor: 0x334155, waveArm: true });
+                deGe.position.set(1.1, 0.8, 0.2);
+                deGe.scale.set(1.15, 1.15, 1.15);
+
+                sceneGroup.add(aKai, deGe);
+            }
+        }
+
+        // 動畫主循環
+        let clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+
+            // 角色親切呼吸起伏與揮手動畫
+            animatedCharacters.forEach((char, idx) => {
+                char.position.y = (char.userData.baseY || 0) + Math.sin(t * 2.5 + idx) * 0.04;
+                if (char.userData.waveArm && char.userData.rightArmPivot) {
+                    char.userData.rightArmPivot.rotation.z = 2.35 + Math.sin(t * 5 + idx) * 0.28;
+                }
+            });
+
+            if (renderer && scene && camera) {
+                renderer.render(scene, camera);
+            }
+        }
+
+        // 處理左側 3D 建築直接點擊互動（第一關街道場所辨識）
+        function handle3DBuildingClick(buildingId) {
+            if (gameState.currentStep !== 2 || gameState.isLocked) return;
+            const stepData = GAME_STEPS[2];
+            const optIndex = stepData.options.findIndex(o => o.id === buildingId);
+            if (optIndex !== -1) {
+                handleOptionSelect(optIndex);
+            }
+        }
+
+        // =========================================================================
+        // 6. UI 渲染與互動邏輯控制
+        // =========================================================================
+        function renderStagePills(currentStageIndex) {
+            const container = document.getElementById('stage-pills');
+            container.innerHTML = '';
+
+            STAGES.forEach(st => {
+                const isCurrent = st.id === currentStageIndex;
+                const isDone = currentStageIndex > st.id;
+
+                const pill = document.createElement('div');
+                pill.className = `flex-shrink-0 px-3 py-1.5 rounded-full text-xs sm:text-sm font-black border-2 transition flex items-center gap-1 ${
+                    isCurrent
+                        ? 'bg-amber-500 text-white border-amber-600 shadow-sm scale-105'
+                        : isDone
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            : 'bg-white text-slate-400 border-slate-200'
+                }`;
+                pill.innerHTML = `${isDone ? '✓ ' : ''}${st.short}`;
+                container.appendChild(pill);
+            });
+        }
+
+        function updateScoreDisplay(delta = 0) {
+            const scoreEl = document.getElementById('score-display');
+            scoreEl.textContent = gameState.score;
+
+            if (delta !== 0) {
+                const floatContainer = document.getElementById('score-float-container');
+                const badge = document.createElement('div');
+                const isPos = delta > 0;
+                badge.className = `score-float px-2.5 py-1 rounded-xl font-black text-sm shadow-md border ${
+                    isPos
+                        ? 'bg-emerald-500 text-white border-emerald-300'
+                        : 'bg-rose-500 text-white border-rose-300'
+                }`;
+                badge.textContent = isPos ? `+${delta} 分！` : `${delta} 分`;
+                floatContainer.appendChild(badge);
+                setTimeout(() => badge.remove(), 1250);
+            }
+        }
+
+        function renderStep(stepIndex) {
+            gameState.currentStep = stepIndex;
+            const step = GAME_STEPS[stepIndex];
+
+            // 切換 3D 場景
+            build3DScene(step.sceneKey);
+
+            // 更新左上角場所標籤與頂部進度膠囊
+            document.getElementById('scene-title').textContent = step.sceneTitle;
+            document.getElementById('scene-subtitle').textContent = step.sceneSubtitle;
+            renderStagePills(step.stageIndex);
+
+            // 隱藏回饋提示框
+            const feedbackBox = document.getElementById('feedback-box');
+            feedbackBox.classList.add('hidden');
+
+            // 處理結算畫面動態評語（導覽員：阿凱）
+            let npcTextToShow = step.npcText;
+            let questionToShow = step.question;
+            let speechQueue = "";
+
+            if (step.isEnding) {
+                const s = gameState.score;
+                let rankTitle = "";
+                let rankComment = "";
+                if (s >= 90) {
+                    rankTitle = "★★★ 社區生活大師（90～100 分）";
+                    rankComment = "太強了！從超商、藥局、夜市、巷口麵店到社區公園，你全部都過關了！你不僅認識每個地方的功能，還會排隊、控制音量、愛護商品和環境，完全具備獨立生活的超強能力！";
+                } else if (s >= 70) {
+                    rankTitle = "★★ 社區探索達人（70～85 分）";
+                    rankComment = "表現很棒喔！五個地方的任務你都順利完成了。只有一兩個小細節稍微扣分，記住『排隊不插隊、室內放輕聲、東西不亂拿、垃圾不亂丟』，下次一定拿滿分！";
+                } else {
+                    rankTitle = "★ 努力學習新星（65 分以下）";
+                    rankComment = "辛苦啦！一次挑戰五個社區場所確實不簡單。我們再重新走一遍，仔細看看每個地方的提示，你一定會越來越厲害的！";
+                }
+                npcTextToShow = rankComment;
+                questionToShow = `最終禮儀總分：${s} 分 ／ 獲得稱號：${rankTitle}`;
+                speechQueue = `恭喜完成所有挑戰！你的最終分數是 ${s} 分，獲得 ${rankTitle}。阿凱說：${rankComment}`;
+            } else {
+                speechQueue = `${step.npcText}。題目：${step.question}`;
+            }
+
+            // 更新 NPC 對話與題目文字
+            document.getElementById('npc-avatar-emoji').textContent = step.npcEmoji;
+            document.getElementById('npc-name').textContent = step.npcName;
+            document.getElementById('npc-role').textContent = step.npcRole;
+            document.getElementById('npc-text').textContent = npcTextToShow;
+            document.getElementById('scenario-badge').textContent = step.scenarioBadge;
+            document.getElementById('question-title').textContent = questionToShow;
+
+            // 學習模式提示框顯示控制
+            const tipBox = document.getElementById('learning-tip-box');
+            if (gameState.mode === 'learning' && step.tip) {
+                tipBox.classList.remove('hidden');
+                document.getElementById('learning-tip-text').textContent = step.tip;
+            } else {
+                tipBox.classList.add('hidden');
+            }
+
+            // 準備選項（挑戰模式下若有多個選項則隨機排序）
+            let opts = step.options.map((o, idx) => ({ ...o, originalIndex: idx }));
+            if (gameState.mode === 'challenge' && opts.length > 1) {
+                opts = opts.sort(() => Math.random() - 0.5);
+            }
+            gameState.currentDisplayedOptions = opts;
+
+            // 渲染大型高對比觸控選項按鈕（高度 >= 56px）
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+
+            opts.forEach((opt, displayIdx) => {
+                const btn = document.createElement('button');
+                btn.id = `opt-btn-${displayIdx}`;
+                btn.className = "option-btn w-full min-h-[60px] px-4 py-3.5 sm:px-5 sm:py-4 rounded-2xl border-2 border-slate-300 bg-white hover:bg-sky-50 hover:border-sky-500 text-left text-slate-900 font-bold text-base sm:text-lg leading-snug shadow-sm flex items-center justify-between gap-3";
+                btn.innerHTML = `
+                    <span class="flex-1">${opt.label}</span>
+                    <span class="text-slate-400 text-xl flex-shrink-0">➔</span>
+                `;
+                btn.onclick = () => handleOptionSelect(displayIdx);
+                optionsContainer.appendChild(btn);
+            });
+
+            // 滾動控制面板回頂部並自動語音朗讀
+            document.getElementById('control-scroll-area').scrollTop = 0;
+            speakText(speechQueue);
+        }
+
+        // 處理選項點擊（含 350ms 防連點機制與學習鷹架引導）
+        function handleOptionSelect(displayIdx) {
+            if (gameState.isLocked) return;
+
+            // 啟動 350ms 防連點鎖定
+            gameState.isLocked = true;
+            setTimeout(() => {
+                gameState.isLocked = false;
+            }, 350);
+
+            const step = GAME_STEPS[gameState.currentStep];
+            const chosen = gameState.currentDisplayedOptions[displayIdx];
+            if (!chosen) return;
+
+            // 若是結算畫面的「再挑戰一次」
+            if (step.isEnding) {
+                playTapSound();
+                resetGameData();
+                renderStep(0);
+                return;
+            }
+
+            const feedbackBox = document.getElementById('feedback-box');
+            const feedbackIcon = document.getElementById('feedback-icon');
+            const feedbackText = document.getElementById('feedback-text');
+            const btnEl = document.getElementById(`opt-btn-${displayIdx}`);
+
+            if (chosen.isCorrect) {
+                // --- 答對處理 ---
+                playSuccessSound();
+
+                // 計算加分（10 題核心選擇題，每題答對 +10 分，最高上限 100 分）
+                let actualDelta = 0;
+                if (step.isScoredQuestion && !gameState.completedQuestions.has(step.questionNum)) {
+                    gameState.completedQuestions.add(step.questionNum);
+                    const prevScore = gameState.score;
+                    gameState.score = Math.min(100, Math.max(0, gameState.score + chosen.delta));
+                    actualDelta = gameState.score - prevScore;
+                }
+                updateScoreDisplay(actualDelta);
+
+                // 按鈕視覺變為正向綠色
+                if (btnEl) {
+                    btnEl.classList.remove('border-slate-300', 'bg-white', 'hover:bg-sky-50');
+                    btnEl.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-950');
+                }
+
+                // 若有覆蓋 NPC（例如第一關走對便利商店時的超商店員招呼）
+                if (chosen.npcOverrideName) {
+                    document.getElementById('npc-name').textContent = chosen.npcOverrideName;
+                    document.getElementById('npc-avatar-emoji').textContent = chosen.npcOverrideEmoji || '🏪';
+                    document.getElementById('npc-text').textContent = chosen.feedback;
+                }
+
+                // 顯示鼓勵回饋並提供「下一步」大按鈕（確保學生看清楚回饋再前進）
+                feedbackBox.classList.remove('hidden', 'bg-rose-50', 'border-rose-300', 'text-rose-900');
+                feedbackBox.classList.add('bg-emerald-50', 'border-emerald-400', 'text-emerald-950');
+                feedbackIcon.textContent = '🎉';
+                feedbackText.textContent = chosen.feedback;
+
+                speakText(chosen.feedback);
+
+                // 將選項區替換為單一大型「下一步」按鈕，防止誤觸並維持清晰學習節奏
+                const optionsContainer = document.getElementById('options-container');
+                const nextBtnLabel = chosen.nextStep === 14 ? "查看我的獨立生活認證成績 🏆" : "太棒了！前往下一步 ➔";
+                optionsContainer.innerHTML = `
+                    <button onclick="proceedToStep(${chosen.nextStep})"
+                        class="option-btn w-full min-h-[64px] px-6 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xl shadow-lg flex items-center justify-center gap-2">
+                        <span>${nextBtnLabel}</span>
+                    </button>
+                `;
+
+            } else {
+                // --- 答錯處理（正向引導提示，扣分最低為 0，允許重新選擇直到選對） ---
+                playGentleHintSound();
+
+                let actualDelta = 0;
+                if (chosen.delta < 0) {
+                    const prevScore = gameState.score;
+                    gameState.score = Math.max(0, gameState.score + chosen.delta);
+                    actualDelta = gameState.score - prevScore;
+                }
+                updateScoreDisplay(actualDelta);
+
+                // 標記此錯誤選項為柔和警示色並暫時禁用，引導重新選擇其他正確選項
+                if (btnEl) {
+                    btnEl.disabled = true;
+                    btnEl.classList.remove('border-slate-300', 'bg-white', 'hover:bg-sky-50');
+                    btnEl.classList.add('border-rose-300', 'bg-rose-50/70', 'text-rose-900');
+                }
+
+                // 在練習模式下，答錯後也顯示提示卡輔助思考
+                if (gameState.mode === 'practice' && step.tip) {
+                    const tipBox = document.getElementById('learning-tip-box');
+                    tipBox.classList.remove('hidden');
+                    document.getElementById('learning-tip-text').textContent = step.tip;
+                }
+
+                feedbackBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-400', 'text-emerald-950');
+                feedbackBox.classList.add('bg-amber-50', 'border-amber-400', 'text-amber-950');
+                feedbackIcon.textContent = '🤔';
+                feedbackText.textContent = chosen.feedback;
+
+                speakText(chosen.feedback);
+            }
+        }
+
+        function proceedToStep(nextStepIndex) {
+            if (gameState.isLocked) return;
+            gameState.isLocked = true;
+            setTimeout(() => { gameState.isLocked = false; }, 350);
+            playTapSound();
+            renderStep(nextStepIndex);
+        }
+
+        // =========================================================================
+        // 7. 老師設定面板與懸浮功能按鈕控制
+        // =========================================================================
+        function toggleTeacherPanel() {
+            playTapSound();
+            const body = document.getElementById('teacher-panel-body');
+            const arrow = document.getElementById('teacher-arrow');
+            const isHidden = body.classList.contains('hidden');
+            if (isHidden) {
+                body.classList.remove('hidden');
+                arrow.style.transform = 'rotate(90deg)';
+            } else {
+                body.classList.add('hidden');
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function setGameMode(newMode) {
+            playTapSound();
+            gameState.mode = newMode;
+
+            const labels = {
+                learning: { text: "學習模式", badgeClass: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+                practice: { text: "練習模式", badgeClass: "bg-sky-100 text-sky-800 border-sky-300" },
+                challenge: { text: "挑戰模式", badgeClass: "bg-amber-100 text-amber-800 border-amber-300" }
+            };
+
+            const badge = document.getElementById('mode-badge');
+            badge.textContent = labels[newMode].text;
+            badge.className = `text-xs font-bold px-2.5 py-0.5 rounded-full border ${labels[newMode].badgeClass}`;
+
+            ['learning', 'practice', 'challenge'].forEach(m => {
+                const btn = document.getElementById(`mode-btn-${m}`);
+                if (m === newMode) {
+                    btn.className = "py-2 px-2 rounded-xl border-2 text-xs sm:text-sm font-bold transition bg-slate-800 text-white border-slate-800";
+                } else {
+                    btn.className = "py-2 px-2 rounded-xl border-2 text-xs sm:text-sm font-bold transition bg-white text-slate-700 border-slate-300 hover:border-slate-400";
+                }
+            });
+
+            // 立即重新渲染當前步驟以套用新模式
+            renderStep(gameState.currentStep);
+        }
+
+        function jumpToStep(stepIdx) {
+            playTapSound();
+            renderStep(stepIdx);
+        }
+
+        function toggleMissionModal(show) {
+            playTapSound();
+            const modal = document.getElementById('mission-modal');
+            if (show) {
+                const step = GAME_STEPS[gameState.currentStep];
+                const currentStage = STAGES.find(s => s.id === step.stageIndex);
+                const content = document.getElementById('mission-modal-content');
+                content.innerHTML = `
+                    <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4">
+                        <div class="text-xs font-black text-amber-700 uppercase">目前任務目標</div>
+                        <div class="text-lg font-black text-slate-900 mt-0.5">${currentStage ? currentStage.name : '陽光社區總認證'}</div>
+                        <p class="text-slate-700 font-bold mt-1">${currentStage ? currentStage.mission : '完成五大社區場所考驗，拿到 80 分以上成為社區生活大師！'}</p>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="font-black text-slate-900">🌟 五大社區禮儀黃金守則：</div>
+                        <ul class="space-y-1.5 text-sm sm:text-base font-bold text-slate-700">
+                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔</span> 1. 排隊不插隊，保持一個手臂的距離。</li>
+                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔</span> 2. 沒買的商品用眼睛看，不隨意拿取或拆封。</li>
+                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔</span> 3. 逛夜市靠邊排隊不擋路，拿飲料不摸商品。</li>
+                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔</span> 4. 餐廳內用放輕音量，餐具拿取適量不浪費。</li>
+                            <li class="flex items-center gap-2"><span class="text-emerald-600">✔</span> 5. 公園垃圾要分類，禮讓兒童遊樂器材。</li>
+                        </ul>
+                    </div>
+                `;
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function toggleHomeModal(show) {
+            playTapSound();
+            const modal = document.getElementById('home-modal');
+            if (show) modal.classList.remove('hidden');
+            else modal.classList.add('hidden');
+        }
+
+        function resetGameData() {
+            gameState.score = 0;
+            gameState.completedQuestions.clear();
+            updateScoreDisplay(0);
+        }
+
+        function resetToHome() {
+            playTapSound();
+            toggleHomeModal(false);
+            resetGameData();
+            renderStep(0);
+        }
+
+        // =========================================================================
+        // 8. 視窗載入啟動入口
+        // =========================================================================
+        window.onload = function () {
+            initThreeJS();
+            animate();
+            // 預載語音列表
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.getVoices();
+            }
+            renderStep(0);
+        };
+    </script>
+</body>
+</html>
